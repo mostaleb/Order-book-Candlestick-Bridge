@@ -1,5 +1,9 @@
 import os
 import secrets
+from datetime import datetime
+import datetime as dt
+
+import json
 
 from PIL import Image
 from flask import render_template, url_for, flash, redirect, request, abort, jsonify, make_response, send_from_directory
@@ -142,12 +146,14 @@ def reset_token(token):
         return redirect(url_for('login'))
     return render_template('reset_token.html', title='Reset Password', form=form)
 
-@app.route("/stock/<ticker>", methods=['GET', 'POST'])
-def stock(ticker):
-    if current_user.is_authenticated:
+@app.route("/stock/<ticker>/<packet_number>", methods=['GET', 'POST'])
+def stock(ticker, packet_number):
 
+    if current_user.is_authenticated:
+        packet = get_stock_packet(ticker, packet_number)
+        packet = remove_cancelled_order(packet)
         response = make_response(
-            jsonify(msg=ticker),
+            packet,
             200
         )
         response.headers["Content-Type"] = "application/json"
@@ -155,10 +161,47 @@ def stock(ticker):
 
     else:
         abort(404)
-# return render_template('reset_token.html', title='Reset Password', form=form)
 
-def get_stock_data():
-    
+def get_stock_packet(ticker, packet_number):
+    data = get_stock_data(ticker)
+    delta = dt.timedelta(seconds=5)
+    START_DATA_SET = "2023-01-06 09:28:00.011058962"
+    START_DATA_SET = START_DATA_SET[:26]
+    START_DATA_SET = datetime.strptime(START_DATA_SET, '%Y-%m-%d %H:%M:%S.%f')
+    START = START_DATA_SET + delta*(int(packet_number)-1)
+    print(int(packet_number))
+    END = START_DATA_SET + delta*int(packet_number)
+    temp = []
+    print("between :", START, "and ", END)
+
+    for i in data:
+        time_tamp = i["TimeStamp"]
+        date_variable = time_tamp[:26]
+        date_variable = datetime.strptime(date_variable, '%Y-%m-%d %H:%M:%S.%f')
+        if END > date_variable > START:
+            temp.append(i)
+    data = temp
+    temp = []
+    return data
+
+def get_stock_data(ticker):
+    f = open("/Users/brahimhamidoudjana/PycharmProjects/APIinterface/APISystem/" + ticker + ".json")
+    data = json.load(f)
+    return data
+
+def remove_cancelled_order(packet):
+    for i in packet:
+        if i["MessageType"] == "CancelRequest" or i["MessageType"] == "CancelAcknowledged" or i["MessageType"] == "NewOrderRequest":
+            del i
+    for i in packet:
+        if i["MessageType"] == "Cancelled":
+            for j in packet:
+                i["OrderID"] == j["OrderID"]
+
+
+
+
+
 
 
 
